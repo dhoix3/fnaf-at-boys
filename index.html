@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Five Nights at the Boys' — FNaF 1 Parody</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Audio unlock overlay -->
+    <div id="audio-unlock" class="unlock-overlay">
+        <div class="unlock-card">
+            <h1>FIVE NIGHTS AT THE BOYS'</h1>
+            <p>Нажмите, чтобы начать смену</p>
+            <button id="start-btn">НАЧАТЬ ИГРУ</button>
+        </div>
+    </div>
+
+    <!-- Office View -->
+    <div id="office" class="office-view hidden">
+        <!-- CRT Scanlines -->
+        <div class="crt-overlay"></div>
+
+        <!-- Power Meter -->
+        <div class="power-panel">
+            <div class="panel-label">POWER</div>
+            <div class="power-bar-container">
+                <div class="power-bar-bg"></div>
+                <div id="power-fill" class="power-bar-fill"></div>
+            </div>
+            <div id="power-text" class="power-value">100%</div>
+        </div>
+
+        <!-- Time -->
+        <div id="time-display" class="time-display">12:00 AM</div>
+
+        <!-- Left Side Buttons -->
+        <div class="side-panel left">
+            <button id="door-left" class="side-btn door-btn" data-side="left">
+                <span class="btn-main">ЛЕВАЯ ДВЕРЬ</span>
+                <span class="btn-state" id="state-door-left">ОТКРЫТА</span>
+            </button>
+            <button id="light-left" class="side-btn light-btn" data-side="left">
+                <span class="btn-main">ЛЕВЫЙ СВЕТ</span>
+                <span class="btn-state" id="state-light-left">ВЫКЛ</span>
+            </button>
+        </div>
+
+        <!-- Right Side Buttons -->
+        <div class="side-panel right">
+            <button id="door-right" class="side-btn door-btn" data-side="right">
+                <span class="btn-main">ПРАВАЯ ДВЕРЬ</span>
+                <span class="btn-state" id="state-door-right">ОТКРЫТА</span>
+            </button>
+            <button id="light-right" class="side-btn light-btn" data-side="right">
+                <span class="btn-main">ПРАВЫЙ СВЕТ</span>
+                <span class="btn-state" id="state-light-right">ВЫКЛ</span>
+            </button>
+        </div>
+
+        <!-- Camera Button -->
+        <button id="camera-btn" class="cam-wide-btn">
+            <span class="btn-main">КАМЕРЫ</span>
+            <span class="btn-state" id="state-camera">ВЫКЛ</span>
+        </button>
+
+        <!-- Doorways -->
+        <div class="doorway-wrapper left">
+            <div class="door-frame left"></div>
+            <div id="char-left" class="char-in-door hidden">
+                <img id="char-left-img" src="assets/photo2.jpg" class="char-img" alt="Left Door">
+                <div class="eyes-glow" id="eyes-left"></div>
+            </div>
+            <div class="door-flap left" id="door-flap-left"></div>
+        </div>
+
+        <div class="doorway-wrapper right">
+            <div class="door-frame right"></div>
+            <div id="char-right" class="char-in-door hidden">
+                <img id="char-right-img" src="assets/photo3.jpg" class="char-img" alt="Right Door">
+                <div class="eyes-glow" id="eyes-right"></div>
+            </div>
+            <div class="door-flap right" id="door-flap-right"></div>
+        </div>
+
+        <!-- Golden Freddy -->
+        <div id="golden-freddy" class="golden-overlay hidden">
+            <img id="gf-img" src="assets/photo5.jpg" class="gf-img" alt="Golden Freddy">
+            <div class="eyes-glow" id="eyes-gf"></div>
+        </div>
+
+        <!-- Power Out -->
+        <div id="power-out" class="power-out hidden">
+            <div class="power-out-msg">POWER OUT</div>
+        </div>
+
+        <!-- Jumpscare -->
+        <div id="jumpscare" class="jumpscare hidden">
+            <div class="js-phase-1" id="js-phase-1"></div>
+            <div class="js-phase-2" id="js-phase-2">
+                <img id="js-img" src="" alt="JUMPSCARE">
+                <div id="js-fallback" class="js-fallback hidden">PHOTO X</div>
+            </div>
+            <div id="js-text">HE'S HERE</div>
+        </div>
+
+        <!-- Win Screen -->
+        <div id="win-screen" class="overlay hidden">
+            <div class="win-content">
+                <h1>6:00 AM</h1>
+                <p>ВЫ ПЕРЕЖИЛИ НОЧЬ</p>
+                <button id="win-restart">ИГРАТЬ СНОВА</button>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over" class="overlay hidden">
+            <div class="go-content">
+                <h1 id="go-title">GAME OVER</h1>
+                <p id="go-sub">ВАС ПОЙМАЛИ</p>
+                <button id="go-restart">ПОПЫТКАТЬСЯ СНОВА</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Camera View -->
+    <div id="camera-view" class="camera-view hidden">
+        <div class="tablet">
+            <div class="tablet-screen">
+                <div class="camera-static"></div>
+                <div class="cam-feed">
+                    <div class="feed-label">FEED: <span id="feed-cam">1A</span></div>
+                    <div id="feed-content" class="feed-content">
+                        <div class="cam-enemy" id="cam-enemy-1A" data-room="1A">
+                            <img id="cam-img-1A" src="assets/photo1.jpg" class="cam-img" alt="CAM 1A">
+                        </div>
+                        <div class="cam-enemy hidden" id="cam-enemy-1B" data-room="1B">
+                            <img id="cam-img-1B" src="assets/photo1.jpg" class="cam-img" alt="CAM 1B">
+                        </div>
+                        <div class="cam-enemy hidden" id="cam-enemy-2A" data-room="2A">
+                            <img id="cam-img-2A" src="assets/photo2.jpg" class="cam-img" alt="CAM 2A">
+                        </div>
+                        <div class="cam-enemy hidden" id="cam-enemy-4A" data-room="4A">
+                            <img id="cam-img-4A" src="assets/photo3.jpg" class="cam-img" alt="CAM 4A">
+                        </div>
+                        <div class="cam-enemy hidden" id="cam-enemy-1C" data-room="1C">
+                            <img id="cam-img-1C" src="assets/photo4.jpg" class="cam-img" alt="CAM 1C">
+                        </div>
+                    </div>
+                    <div class="cam-footer">CAMERA SYSTEM v1.0</div>
+                </div>
+                <div class="cam-map-grid">
+                    <button class="cam-room-btn" data-cam="1A">CAM 1A<br><small>STAGE</small></button>
+                    <button class="cam-room-btn" data-cam="1B">CAM 1B<br><small>DINING</small></button>
+                    <button class="cam-room-btn" data-cam="2A">CAM 2A<br><small>WEST HALL</small></button>
+                    <button class="cam-room-btn" data-cam="4A">CAM 4A<br><small>EAST HALL</small></button>
+                    <button class="cam-room-btn" data-cam="1C">CAM 1C<br><small>PIRATE COVE</small></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
