@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pygame
 
+from renderer3d import OFFICE_MAP, Raycaster, Sprite3D, camera_room_world, prepare_photo
+
 
 WIDTH, HEIGHT = 1280, 720
 ROOM_POS = {
@@ -35,13 +37,14 @@ class UI:
         for number in range(1, 6):
             path = asset_path(f"assets/images/photo{number}.jpg")
             try:
-                self.images[number] = pygame.image.load(path).convert()
+                self.images[number] = prepare_photo(pygame.image.load(path).convert())
             except (pygame.error, OSError) as exc:
                 print(f"[assets] Missing image {path}: {exc}")
                 fallback = pygame.Surface((320, 480))
                 fallback.fill((25, 20, 22))
                 pygame.draw.circle(fallback, (145, 24, 24), (160, 170), 54, 5)
                 self.images[number] = fallback
+        self.raycaster = Raycaster((400, 225))
         self.pressed: dict[str, float] = {}
         self.vhs = self._make_vhs_overlay()
         self.glitch_rng = random.Random()
@@ -107,7 +110,7 @@ class UI:
                     side = name.split("_")[0]
                     game.toggle_light(side)
                 else:
-                    game.cameras.open = not game.cameras.open
+                    game.set_camera_open(not game.cameras.open)
                 return True
         return False
 
@@ -122,7 +125,7 @@ class UI:
                     game.audio.play("camera")
                     return True
         if (x > 1120 and y < 100) or pygame.Rect(990, 522, 180, 44).collidepoint(pos):
-            game.cameras.open = False
+            game.set_camera_open(False)
             return True
         return False
 
@@ -243,34 +246,43 @@ class UI:
         pygame.draw.ellipse(lamp_glow, (210, 185, 115, 16), lamp_glow.get_rect())
         self.screen.blit(lamp_glow, (460, 120))
 
-    def _draw_office(self, game) -> None:
-        self._draw_wall_and_floor(game)
-        # Door alcoves, layered frames and deep black hallways.
-        frames = {"left": pygame.Rect(224, 202, 150, 283), "right": pygame.Rect(906, 202, 150, 283)}
-        for side, frame in frames.items():
-            pygame.draw.rect(self.screen, (7, 8, 9), frame.inflate(18, 16))
-            pygame.draw.rect(self.screen, (68, 68, 64), frame, 7)
-            opening = frame.inflate(-18, -18)
-            pygame.draw.rect(self.screen, (1, 2, 3), opening)
-            pygame.draw.line(self.screen, (105, 100, 88), (frame.x+4, frame.y+4), (frame.x+4, frame.bottom-5), 3)
-            enemy = game.enemy_at_door(side)
-            if enemy and not game.player.doors[side]:
-                if game.player.lights[side]:
-                    self._door_light(opening)
-                    self._draw_enemy(enemy, opening, lit=True)
-                else:
-                    self._draw_enemy_eyes(opening)
-            if game.player.doors[side]:
-                self._metal_door(frame)
+    def _office_sprites(self, game) -> list[Sprite3D]:
+        positions = {
+            "LDoor": (2.4, 5.0, "left"), "RDoor": (23.2, 5.0, "right"),
+            "2A": (19.7, 4.2, "right"), "2B": (20.4, 4.5, "right"),
+            "4A": (19.7, 6.8, "right"), "4B": (20.4, 6.5, "right"),
+        }
+        sprites = []
+        for enemy in game.enemies:
+            if enemy.room not in positions:
+                continue
+            x, y, side = positions[enemy.room]
+            lit = game.player.lights[side]
+            sprites.append(Sprite3D(self.images[enemy.photo], x, y, enemy.name, lit, not lit, 2.0))
+        return sprites
 
-        # Desk foreground with a CRT, mug, papers and wood-highlight edge.
-        desk = [(190, 581), (1090, 581), (1178, 720), (102, 720)]
-        pygame.draw.polygon(self.screen, (27, 23, 20), desk)
-        pygame.draw.line(self.screen, (104, 79, 54), desk[0], desk[1], 7)
-        pygame.draw.line(self.screen, (9, 8, 7), (102,720), (1178,720), 4)
+    def _draw_office(self, game) -> None:
+        lights = []
+        if game.player.lights["left"]:
+            lights.append((4.0, 5.0))
+        if game.player.lights["right"]:
+            lights.append((21.0, 5.0))
+        rendered = self.raycaster.render(
+            OFFICE_MAP,
+            (12.5, 5.5),
+            game.look_angle,
+            self._office_sprites(game),
+            game.door_open_amount,
+            lights,
+        )
+        self.screen.blit(pygame.transform.smoothscale(rendered, (WIDTH, HEIGHT)), (0, 0))
+
+        # The monitor/desk lip is a foreground plane; all architectural depth behind it
+        # comes from the raycaster rather than a flat background illustration.
+        pygame.draw.polygon(self.screen, (19, 17, 15), [(0, 658), (WIDTH, 658), (WIDTH, HEIGHT), (0, HEIGHT)])
+        pygame.draw.line(self.screen, (93, 70, 47), (0, 658), (WIDTH, 658), 5)
         self._draw_desk()
 
-        # Buttons, HUD and crosshair status.
         self._button(pygame.Rect(24,380,188,72), self._l(game, "door_left", status=self._l(game, "state_sealed" if game.player.doors['left'] else "state_open")), game.player.doors['left'], "left_door")
         self._button(pygame.Rect(24,463,188,72), self._l(game, "light_left", status=self._l(game, "state_on" if game.player.lights['left'] else "state_off")), game.player.lights['left'], "left_light")
         self._button(pygame.Rect(1068,380,188,72), self._l(game, "door_right", status=self._l(game, "state_sealed" if game.player.doors['right'] else "state_open")), game.player.doors['right'], "right_door")
@@ -286,41 +298,6 @@ class UI:
         self._text(self._l(game, "usage", bars="▮"*usage), self.tiny, (197, 204, 181), (25, 73))
         if game.player.power < 18 and int(time.monotonic()*3) % 2:
             self._text(self._l(game, "low_power"), self.small, (235, 40, 34), (640, 568), True)
-
-    def _door_light(self, rect: pygame.Rect) -> None:
-        # A feathered alpha ellipse softly illuminates only the doorway opening.
-        glow = pygame.Surface((rect.w, rect.h), pygame.SRCALPHA)
-        center = (rect.w//2, int(rect.h*.58))
-        for radius in range(145, 5, -8):
-            alpha = max(1, int(42 * (1 - radius/155)))
-            pygame.draw.ellipse(glow, (255, 218, 144, alpha),
-                                (center[0]-radius, center[1]-radius*1.15, radius*2, radius*2.3))
-        self.screen.blit(glow, rect.topleft)
-
-    def _draw_enemy(self, enemy, rect: pygame.Rect, lit=False) -> None:
-        image = self.images.get(enemy.photo)
-        if image:
-            height = int(rect.h * 1.12)
-            width = max(1, int(image.get_width()*height/image.get_height()))
-            sprite = pygame.transform.smoothscale(image, (width, height))
-            if not lit:
-                sprite.fill((20, 20, 22), special_flags=pygame.BLEND_RGB_MULT)
-            self.screen.set_clip(rect)
-            self.screen.blit(sprite, (rect.centerx-width//2, rect.bottom-height))
-            self.screen.set_clip(None)
-
-    def _draw_enemy_eyes(self, rect: pygame.Rect) -> None:
-        y = rect.y + rect.h//3
-        for x in (rect.centerx-19, rect.centerx+19):
-            pygame.draw.circle(self.screen, (83, 0, 0), (x,y), 13)
-            pygame.draw.circle(self.screen, (255, 26, 20), (x,y), 4)
-
-    def _metal_door(self, frame: pygame.Rect) -> None:
-        pygame.draw.rect(self.screen, (56, 59, 58), frame.inflate(-10,-10))
-        for y in range(frame.y+20, frame.bottom-15, 23):
-            pygame.draw.line(self.screen, (37, 40, 40), (frame.x+9,y), (frame.right-9,y), 2)
-        pygame.draw.line(self.screen, (116, 116, 108), (frame.x+8,frame.y+8), (frame.x+8,frame.bottom-10), 3)
-        pygame.draw.circle(self.screen, (145, 119, 73), (frame.centerx, frame.bottom-25), 5)
 
     def _draw_desk(self) -> None:
         x, y = 562, 500
@@ -363,22 +340,19 @@ class UI:
         pygame.draw.rect(self.screen,(105,107,98),tablet,3,border_radius=18)
         feed = pygame.Rect(108,87,850,518)
         pygame.draw.rect(self.screen,(5,9,7),feed)
-        pygame.draw.rect(self.screen,(59,87,66),feed,2)
         room = game.cameras.current
+        camera_world, camera_pos, camera_angle = camera_room_world(room)
+        occupants = game.enemies_in_room(room)
+        sprite_x = 8.4 if room == "1B" else 6.5
+        camera_sprites = [Sprite3D(self.images[enemy.photo], sprite_x, 4.8, enemy.name, True, False, 1.15) for enemy in occupants]
+        camera_view = self.raycaster.render(camera_world, camera_pos, camera_angle, camera_sprites)
+        self.screen.blit(pygame.transform.smoothscale(camera_view, feed.size), feed.topleft)
+        pygame.draw.rect(self.screen,(59,87,66),feed,2)
         self._text(self._l(game, "cam_feed", room=room, name=self._l(game, f"room_{room}")), self.small, (138,221,152), (feed.x+20,feed.y+14))
         foxy = next((enemy for enemy in game.enemies if enemy.name == "Foxy"), None)
         if foxy and foxy.running:
             pygame.draw.rect(self.screen, (72, 8, 12), (feed.x+16, feed.bottom-58, feed.w-32, 32))
             self._text(self._l(game, "motion_alert"), self.tiny, (255,125,103), (feed.centerx,feed.bottom-42), True, False)
-        occupants = game.enemies_in_room(room)
-        if occupants:
-            enemy = occupants[0]
-            rect = pygame.Rect(feed.centerx-130,feed.y+120,260,340)
-            self._draw_enemy(enemy, rect, lit=True)
-            # Dirty chromatic fringe and occasional horizontal tearing.
-            pygame.draw.line(self.screen,(100,28,37),(rect.x-8,rect.centery),(rect.right+10,rect.centery),2)
-        else:
-            self._draw_empty_feed(feed, room, game)
         if time.monotonic() < game.cameras.glitch_until:
             for _ in range(20):
                 gy = random.randrange(feed.y+34,feed.bottom-8)
@@ -406,29 +380,13 @@ class UI:
         self._text(self._l(game, "cam_lower"),self.tiny,(210,179,159),(1080,544),True,False)
         self._text(self._l(game, "cam_live"),self.tiny,(122,133,122),(110,615))
 
-    def _draw_empty_feed(self, feed: pygame.Rect, room: str, game) -> None:
-        pygame.draw.rect(self.screen,(16,19,17),feed.inflate(-24,-70))
-        # Room dressing varies by feed: party tables, hallway vanishing point, cove curtain.
-        inner=feed.inflate(-35,-95)
-        if room in ("2A","2B","4A","4B"):
-            pygame.draw.polygon(self.screen,(31,32,30),[(inner.x,inner.y),(inner.right,inner.y),(inner.centerx+55,inner.bottom),(inner.centerx-55,inner.bottom)])
-            pygame.draw.line(self.screen,(65,67,61),(inner.centerx,inner.y),(inner.centerx,inner.bottom),3)
-        elif room == "1C":
-            pygame.draw.rect(self.screen,(77,13,24),inner)
-            for x in range(inner.x,inner.right,24): pygame.draw.line(self.screen,(101,28,36),(x,inner.y),(x-28,inner.bottom),3)
-        else:
-            for x in range(inner.x+35,inner.right-25,100):
-                pygame.draw.line(self.screen,(63,59,49),(x,inner.y+80),(x,inner.bottom-10),4)
-                pygame.draw.circle(self.screen,(108,91,62),(x,inner.y+75),10,2)
-        self._text(self._l(game, "cam_empty"),self.tiny,(104,120,106),(feed.centerx,feed.bottom-30),True)
-
     def _draw_scare(self, game) -> None:
         elapsed = time.monotonic() - game.scare_started
         if elapsed < 1.45:
-            self.screen.fill((3,2,3))
-            shake = int(10 + elapsed*15)
+            self.screen.fill((24, 1, 4))
+            shake = int(10 + elapsed*22)
             dx,dy=random.randint(-shake,shake),random.randint(-shake,shake)
-            size = min(1.45, 0.70 + elapsed*1.1)
+            size = min(3.2, 0.42 + elapsed*2.25)
             img=self.images[game.scare_photo]
             w,h=int(WIDTH*size),int(HEIGHT*size)
             sprite=pygame.transform.smoothscale(img,(w,h))
@@ -445,8 +403,8 @@ class UI:
             self._draw_end(game)
 
     def _draw_end(self, game) -> None:
-        self.screen.fill((4,4,5))
-        self._draw_wall_and_floor(game)
+        world = self.raycaster.render(OFFICE_MAP, (12.5, 5.5), game.look_angle, self._office_sprites(game), game.door_open_amount)
+        self.screen.blit(pygame.transform.smoothscale(world, (WIDTH, HEIGHT)), (0, 0))
         veil=pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA)
         veil.fill((0,0,0,220))
         self.screen.blit(veil,(0,0))

@@ -1,6 +1,7 @@
 """Game orchestration, state transitions, input, and frame loop."""
 from __future__ import annotations
 
+import math
 import time
 
 import pygame
@@ -36,6 +37,9 @@ class Game:
         self.mode = "menu"
         self.night_elapsed = 0.0
         self.power_out_at: float | None = None
+        self.look_angle = 0.0
+        self._mouse_warp_pending = False
+        self.door_open_amount = {"left": 0.0, "right": 0.0}
         self.scare_started = 0.0
         self.scare_photo = 1
         self.running = True
@@ -66,11 +70,29 @@ class Game:
     def leave_settings(self) -> None:
         self.save_settings()
         self.mode = "menu"
+        pygame.event.set_grab(False)
+        pygame.mouse.set_visible(True)
+
+    def set_camera_open(self, opened: bool) -> None:
+        self.cameras.open = opened
+        pygame.event.set_grab(not opened)
+        pygame.mouse.set_visible(True)
+        if not opened:
+            pygame.mouse.set_pos((WIDTH // 2, HEIGHT // 2))
+            self._mouse_warp_pending = True
+        else:
+            self._mouse_warp_pending = False
 
     def start_night(self) -> None:
         self.mode = "playing"
+        pygame.mouse.set_visible(True)
+        pygame.event.set_grab(True)
+        pygame.mouse.set_pos((WIDTH // 2, HEIGHT // 2))
+        self._mouse_warp_pending = True
         self.night_elapsed = 0.0
         self.power_out_at = None
+        self.look_angle = 0.0
+        self.door_open_amount = {"left": 1.0, "right": 1.0}
         self.player.reset()
         self.cameras.reset()
         for enemy in self.enemies:
@@ -80,6 +102,16 @@ class Game:
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type == pygame.QUIT:
             self.running = False
+            return
+        if event.type == pygame.MOUSEMOTION and self.mode == "playing" and not self.cameras.open:
+            if self._mouse_warp_pending and abs(event.pos[0] - WIDTH // 2) <= 3:
+                self._mouse_warp_pending = False
+                return
+            self._mouse_warp_pending = False
+            self.look_angle = (self.look_angle + event.rel[0] * 0.0038) % math.tau
+            if event.pos[0] <= 2 or event.pos[0] >= WIDTH - 3:
+                pygame.mouse.set_pos((WIDTH // 2, event.pos[1]))
+                self._mouse_warp_pending = True
             return
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.mode == "playing" and self.power_out_at is not None:
@@ -120,9 +152,13 @@ class Game:
         if self.mode != "playing" or self.power_out_at is not None:
             return
         if event.key == pygame.K_ESCAPE:
-            self.cameras.open = False
+            self.set_camera_open(False)
+        elif event.key == pygame.K_LEFT:
+            self.look_angle = (self.look_angle - 0.08) % math.tau
+        elif event.key == pygame.K_RIGHT:
+            self.look_angle = (self.look_angle + 0.08) % math.tau
         elif event.key == pygame.K_SPACE:
-            self.cameras.open = not self.cameras.open
+            self.set_camera_open(not self.cameras.open)
         elif event.key in (pygame.K_a, pygame.K_d, pygame.K_q, pygame.K_e) and not self.cameras.open:
             if event.key == pygame.K_a:
                 self.toggle_door("left")
@@ -165,6 +201,8 @@ class Game:
         self.scare_photo = enemy.photo if enemy else 1
         self.scare_started = time.monotonic()
         self.mode = "scare"
+        pygame.event.set_grab(False)
+        pygame.mouse.set_visible(True)
         self.audio.stop_ambient()
         self.audio.play("jumpscare")
 
@@ -173,6 +211,11 @@ class Game:
             return
         if self.mode != "playing":
             return
+        for side in ("left", "right"):
+            target = 0.0 if self.player.doors[side] else 1.0
+            current = self.door_open_amount[side]
+            step = min(1.0, dt / 0.42)
+            self.door_open_amount[side] = min(target, current + step) if target > current else max(target, current - step)
         if self.power_out_at is not None:
             if time.monotonic() - self.power_out_at >= 5.0:
                 self.trigger_jumpscare("Freddy")
@@ -182,6 +225,8 @@ class Game:
         if self.night_elapsed >= self.NIGHT_SECONDS:
             self.night_elapsed = self.NIGHT_SECONDS
             self.mode = "won"
+            pygame.event.set_grab(False)
+            pygame.mouse.set_visible(True)
             self.audio.stop_ambient()
             return
 
@@ -192,7 +237,7 @@ class Game:
         if self.player.drain(dt, self.cameras.open):
             self.player.doors = {"left": False, "right": False}
             self.player.lights = {"left": False, "right": False}
-            self.cameras.open = False
+            self.set_camera_open(False)
             self.power_out_at = time.monotonic()
 
     def run(self) -> None:
