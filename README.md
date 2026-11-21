@@ -1,11 +1,12 @@
 # Five Nights at the Boys'
 
-A small Pygame night-shift horror game. The game code is split into focused modules:
+A first-person, software-raycast Pygame night-shift horror game. The 3D-style world is rendered entirely with `pygame.Surface` and standard 2D drawing; animatronics are billboards cut from the five supplied photos, with no OpenGL or external models. The game code is split into focused modules:
 
 - `main.py` — application entry point.
 - `game.py` — game loop, input and mode transitions.
 - `entities.py` — player controls, cameras and animatronic behavior.
-- `ui.py` — office, CRT/VHS treatment, camera tablet, menu and scare rendering.
+- `renderer3d.py` — textured DDA raycaster, animated door planes and z-buffered, camera-facing photo billboards.
+- `ui.py` — HUD, CRT/VHS treatment, first-person camera tablet, menus and scare rendering.
 - `audio_manager.py` — optional file-backed sound playback with silent fallback.
 - `localization.py` and `locales/` — English/Russian UI strings.
 - `settings.py` — validated preferences and persistent `config.json` storage.
@@ -17,7 +18,7 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
-Controls: **A/D** doors, **Q/E** lights, **Space** raise/lower cameras, **1–0** select feeds.
+Controls: **Mouse / ← / →** look around, **A/D** doors, **Q/E** lights, **Space** raise/lower cameras, **1–0** select feeds.
 Open **Settings** from the title screen (or press **S**) to switch RU/EN, adjust master
 volume, and toggle fullscreen. Preferences are saved to `config.json` next to the game,
 with a per-user config fallback if that directory is not writable. Missing optional audio
