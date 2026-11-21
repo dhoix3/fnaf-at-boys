@@ -7,23 +7,24 @@ import pygame
 
 from audio_manager import AudioManager
 from entities import Animatronic, CameraSystem, Foxy, Player
+from localization import LocalizationManager
+from settings import SettingsStore
 from ui import HEIGHT, WIDTH, UI
 
 
 class Game:
     NIGHT_SECONDS = 240.0
-    room_names = {
-        "1A": "MAIN STAGE", "1B": "DINING ROOM", "1C": "PIRATE COVE",
-        "2A": "WEST HALL", "2B": "WEST CORNER", "4A": "EAST HALL",
-        "4B": "EAST CORNER", "5": "BACKSTAGE", "6": "KITCHEN", "7": "RESTROOMS",
-    }
-
     def __init__(self) -> None:
-        pygame.display.set_caption("Five Nights at the Boys' — Night Shift")
-        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        self.settings_store = SettingsStore()
+        self.settings = self.settings_store.values
+        self.localization = LocalizationManager(self.settings["language"])
+        pygame.display.set_caption(self.localization.get("window_title"))
+        flags = pygame.FULLSCREEN if self.settings["fullscreen"] else 0
+        self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
         self.clock = pygame.time.Clock()
         self.ui = UI(self.screen)
         self.audio = AudioManager()
+        self.audio.set_volume(self.settings["volume"])
         self.player = Player()
         self.cameras = CameraSystem()
         self.enemies = [
@@ -42,7 +43,29 @@ class Game:
     @property
     def clock_label(self) -> str:
         hour = min(6, int(self.night_elapsed / (self.NIGHT_SECONDS / 6)))
-        return f"{12 if hour == 0 else hour}:00 AM"
+        return f"{12 if hour == 0 else hour}:00 {self.localization.get('period_am')}"
+
+    def set_language(self, language: str) -> None:
+        self.settings_store.set("language", language)
+        self.localization.set_language(self.settings["language"])
+        pygame.display.set_caption(self.localization.get("window_title"))
+
+    def set_volume(self, volume: float) -> None:
+        self.settings_store.set("volume", volume)
+        self.audio.set_volume(self.settings["volume"])
+
+    def set_fullscreen(self, enabled: bool) -> None:
+        self.settings_store.set("fullscreen", enabled)
+        flags = pygame.FULLSCREEN if self.settings["fullscreen"] else 0
+        self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
+        self.ui.screen = self.screen
+
+    def save_settings(self) -> None:
+        self.settings_store.save()
+
+    def leave_settings(self) -> None:
+        self.save_settings()
+        self.mode = "menu"
 
     def start_night(self) -> None:
         self.mode = "playing"
@@ -61,7 +84,10 @@ class Game:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.mode == "playing" and self.power_out_at is not None:
                 return
-            if self.mode in ("menu", "dead", "won"):
+            if self.mode in ("menu", "settings"):
+                self.ui.hit_test(event.pos, self)
+                return
+            if self.mode in ("dead", "won"):
                 self.start_night()
                 return
             self.ui.hit_test(event.pos, self)
@@ -69,8 +95,24 @@ class Game:
         if event.type != pygame.KEYDOWN:
             return
         if self.mode == "menu":
-            if event.key != pygame.K_ESCAPE:
+            if event.key in (pygame.K_s, pygame.K_F1):
+                self.mode = "settings"
+            elif event.key == pygame.K_ESCAPE:
+                self.running = False
+            else:
                 self.start_night()
+            return
+        if self.mode == "settings":
+            if event.key == pygame.K_ESCAPE:
+                self.leave_settings()
+            elif event.key == pygame.K_l:
+                self.set_language("ru" if self.localization.language == "en" else "en")
+            elif event.key in (pygame.K_LEFT, pygame.K_MINUS):
+                self.set_volume(self.settings["volume"] - 0.1)
+            elif event.key in (pygame.K_RIGHT, pygame.K_PLUS, pygame.K_EQUALS):
+                self.set_volume(self.settings["volume"] + 0.1)
+            elif event.key == pygame.K_f:
+                self.set_fullscreen(not self.settings["fullscreen"])
             return
         if self.mode in ("dead", "won"):
             self.start_night()
@@ -160,4 +202,5 @@ class Game:
                 self.handle_event(event)
             self.update(dt)
             self.ui.draw(self)
+        self.save_settings()
         self.audio.close()
