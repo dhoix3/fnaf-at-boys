@@ -18,19 +18,25 @@ WIDTH, HEIGHT = 1280, 720
 CAM_MAP_SIZE = (492, 400)
 CAM_MAP_RECT = pygame.Rect(900, 142, 282, 230)
 CAM_NODES = {
-    "1A": (207, 8, 66, 39), "1B": (207, 78, 66, 39),
-    "1C": (112, 93, 66, 39), "5": (22, 54, 66, 39), "7": (398, 93, 66, 39),
-    "3": (37, 286, 66, 39), "2A": (124, 284, 66, 39), "2B": (124, 340, 66, 39),
-    "6": (365, 246, 66, 39), "4A": (302, 284, 66, 39), "4B": (302, 340, 66, 39),
-    "YOU": (207, 372, 66, 25),
+    "1A": (201, 6, 78, 48), "1B": (201, 78, 78, 48),
+    "1C": (108, 93, 78, 48), "5": (18, 52, 78, 48), "7": (394, 93, 78, 48),
+    "3": (31, 282, 78, 48), "2A": (118, 280, 78, 48), "2B": (118, 338, 78, 48),
+    "6": (359, 243, 78, 48), "4A": (296, 280, 78, 48), "4B": (296, 338, 78, 48),
+    "YOU": (201, 372, 78, 29),
 }
 CAM_CONNECTIONS = (
-    ((240,47),(240,78)), ((207,98),(178,98),(178,112)),
-    ((145,93),(88,93),(88,73)), ((273,98),(398,98)),
-    ((145,304),(103,304)), ((190,304),(302,304)),
-    ((157,323),(157,340)), ((335,265),(335,284)),
-    ((302,304),(270,304),(270,265),(365,265)),
-    ((190,359),(207,359)), ((302,359),(273,359)), ((240,379),(240,397)),
+    ((240,47),(240,78)),                         # stage to dining
+    ((190,112),(198,112),(198,98),(207,98)),    # cove to dining
+    ((145,93),(88,93),(88,73)),                 # backstage to cove
+    ((273,98),(398,98)),                         # dining to restrooms
+    ((124,304),(103,304)),                       # storage to west hall
+    ((240,117),(240,220),(157,220),(157,284)),  # dining to west hall
+    ((240,220),(335,220),(335,284)),            # dining to east hall
+    ((157,323),(157,340)),                       # west hall to corner
+    ((335,323),(335,340)),                       # east hall to corner
+    ((368,304),(390,304),(390,285),(398,285)),  # east hall to kitchen
+    ((190,359),(207,359)), ((302,359),(273,359)),
+    ((240,397),(240,400)),                       # office below map
 )
 
 
@@ -263,9 +269,12 @@ class UI:
     def _draw_office(self, game) -> None:
         self.fan_phase += 0.09
         offset = max(-330, min(330, int(game.look_angle * 220)))
-        intruders = {"left": any(e.room == "LDoor" for e in game.enemies),
-                     "right": any(e.room == "RDoor" for e in game.enemies)}
-        render_office(self.screen, offset, game.player.doors, game.player.lights, intruders, self.fan_phase)
+        intruders = {
+            "left": next((enemy.photo for enemy in game.enemies if enemy.room == "LDoor"), None),
+            "right": next((enemy.photo for enemy in game.enemies if enemy.room == "RDoor"), None),
+        }
+        render_office(self.screen, offset, game.player.doors, game.player.lights,
+                      intruders, self.fan_phase, self.images)
 
         self._button(pygame.Rect(24,380,188,72), self._l(game, "door_left", status=self._l(game, "state_sealed" if game.player.doors['left'] else "state_open")), game.player.doors['left'], "left_door")
         self._button(pygame.Rect(24,463,188,72), self._l(game, "light_left", status=self._l(game, "state_on" if game.player.lights['left'] else "state_off")), game.player.lights['left'], "left_light")
@@ -327,10 +336,8 @@ class UI:
         room = game.cameras.current
         occupants = game.enemies_in_room(room)
         render_camera(self.camera_feed, room, [enemy.photo for enemy in occupants], self.images, time.monotonic())
-        # Composite in subdued phosphor-green surveillance palette.
-        tinted = self.camera_feed.copy()
-        tinted.fill((155, 190, 160, 42), special_flags=pygame.BLEND_RGBA_MULT)
-        self.screen.blit(tinted, feed.topleft)
+        # Scene already has a faint green room-only haze; photo overlays remain natural.
+        self.screen.blit(self.camera_feed, feed.topleft)
         pygame.draw.rect(self.screen,(59,87,66),feed,2)
         self._text(self._l(game, "cam_feed", room=room, name=self._l(game, f"room_{room}")), self.small, (138,221,152), (feed.x+20,feed.y+14))
         foxy = next((enemy for enemy in game.enemies if enemy.name == "Foxy"), None)
