@@ -275,6 +275,79 @@ CAM_ROOMS = {
 # ------------------------------------------------------------------
 # Main Game
 # ------------------------------------------------------------------
+def draw_room_decor(surface):
+    """Layered faux-3D office materials, perspective seams, and practical props."""
+    for x in (220, 430, 640, 850, 1060):
+        pygame.draw.line(surface, (43, 43, 43), (x, 95), (x, 445), 3)
+        pygame.draw.line(surface, (11, 12, 13), (x + 4, 98), (x + 4, 445), 2)
+    for y in (150, 255, 360, 445):
+        pygame.draw.line(surface, (38, 38, 38), (225, y), (1055, y), 2)
+        pygame.draw.line(surface, (10, 11, 12), (225, y + 3), (1055, y + 3), 2)
+
+    # Framed, faded party posters with simple mascot-like face artwork.
+    for rect, tint, title in [
+        (pygame.Rect(300, 170, 115, 145), (85, 60, 42), "PARTY!"),
+        (pygame.Rect(865, 170, 115, 145), (55, 53, 43), "CELEBRATE"),
+    ]:
+        pygame.draw.rect(surface, (7, 7, 7), rect.move(7, 8), border_radius=3)
+        pygame.draw.rect(surface, (105, 79, 52), rect, border_radius=3)
+        inner = rect.inflate(-12, -12)
+        pygame.draw.rect(surface, tint, inner)
+        pygame.draw.rect(surface, (31, 27, 23), inner, 3)
+        pygame.draw.circle(surface, (180, 143, 83), (rect.centerx, rect.y + 64), 23, 2)
+        pygame.draw.circle(surface, (27, 25, 22), (rect.centerx - 8, rect.y + 60), 3)
+        pygame.draw.circle(surface, (27, 25, 22), (rect.centerx + 8, rect.y + 60), 3)
+        label = tiny_font.render(title, True, (218, 195, 153))
+        surface.blit(label, label.get_rect(center=(rect.centerx, rect.bottom - 20)))
+
+    # Ventilation grilles.
+    for x in (210, 1015):
+        vent = pygame.Rect(x, 385, 65, 28)
+        pygame.draw.rect(surface, (8, 9, 10), vent.inflate(8, 8), border_radius=2)
+        pygame.draw.rect(surface, (74, 75, 72), vent, 2)
+        for yy in range(vent.y + 5, vent.bottom - 2, 5):
+            pygame.draw.line(surface, (105, 105, 99), (vent.x + 4, yy), (vent.right - 4, yy), 2)
+
+    # Perspective floor seams converge at the horizon.
+    vanish = (WIDTH // 2, int(HEIGHT * .62))
+    for x in range(-100, WIDTH + 200, 150):
+        pygame.draw.line(surface, (30, 29, 27), vanish, (x, HEIGHT), 2)
+    for y, spread in ((520, 65), (575, 145), (635, 250), (695, 400)):
+        pygame.draw.line(surface, (27, 26, 24), (vanish[0] - spread, y), (vanish[0] + spread, y), 2)
+
+    # Cable, industrial light housing, and restrained warm spill.
+    pygame.draw.line(surface, (8, 8, 9), (WIDTH // 2, 0), (WIDTH // 2, 130), 4)
+    pygame.draw.polygon(surface, (73, 71, 63), [(WIDTH//2-62,127),(WIDTH//2+62,127),(WIDTH//2+82,151),(WIDTH//2-82,151)])
+    pygame.draw.polygon(surface, (168, 157, 122), [(WIDTH//2-45,132),(WIDTH//2+45,132),(WIDTH//2+57,146),(WIDTH//2-57,146)])
+    glow = pygame.Surface((260, 150), pygame.SRCALPHA)
+    pygame.draw.ellipse(glow, (255, 223, 152, 22), glow.get_rect())
+    surface.blit(glow, (WIDTH//2-130, 145))
+
+
+def draw_desk_props(surface):
+    """Foreground CRT, mug and paperwork establish scale and depth."""
+    x, y = WIDTH // 2 - 82, HEIGHT - 245
+    pygame.draw.polygon(surface, (9, 10, 10), [(x+8,y+12),(x+163,y+12),(x+151,y+120),(x,y+120)])
+    pygame.draw.rect(surface, (48, 49, 46), (x, y, 158, 112), border_radius=12)
+    pygame.draw.rect(surface, (9, 13, 12), (x+12,y+11,134,82), border_radius=10)
+    pygame.draw.rect(surface, (45, 86, 58), (x+19,y+18,120,67), border_radius=7)
+    for yy in range(y+23, y+84, 5):
+        pygame.draw.line(surface, (28, 59, 41), (x+23,yy), (x+135,yy), 1)
+    pygame.draw.circle(surface, (65, 220, 112), (x+133,y+101), 3)
+    pygame.draw.polygon(surface, (36, 37, 35), [(x+60,y+112),(x+102,y+112),(x+112,y+142),(x+50,y+142)])
+    pygame.draw.line(surface, (88, 87, 79), (x+10,y+4), (x+142,y+4), 2)
+    mug = pygame.Rect(x-124, y+89, 35, 42)
+    pygame.draw.ellipse(surface, (20,20,20), mug.move(3,5))
+    pygame.draw.rect(surface, (91,83,70), mug, border_radius=5)
+    pygame.draw.ellipse(surface, (25,23,21), (mug.x+2,mug.y,mug.w-4,10))
+    pygame.draw.arc(surface, (135,125,107), (mug.right-2,mug.y+8,20,24), -1.5, 1.5, 3)
+    paper = [(x+190,y+111),(x+284,y+100),(x+294,y+128),(x+198,y+140)]
+    pygame.draw.polygon(surface, (112,105,91), [(px+3,py+4) for px,py in paper])
+    pygame.draw.polygon(surface, (185,177,155), paper)
+    pygame.draw.line(surface, (110,102,86), (x+207,y+117),(x+274,y+109),1)
+    pygame.draw.line(surface, (110,102,86), (x+210,y+125),(x+280,y+118),1)
+
+
 def main():
     init_sounds()
     state = GameState()
@@ -474,6 +547,7 @@ def main():
             (int(WIDTH * 0.42), int(HEIGHT * 0.62)),
         ]
         pygame.draw.polygon(screen, (15, 15, 15), floor)
+        draw_room_decor(screen)
 
         # Guard desk
         desk_top_w = WIDTH * 0.7
@@ -487,6 +561,8 @@ def main():
         ]
         pygame.draw.polygon(screen, (35, 35, 35), desk)
         pygame.draw.polygon(screen, (55, 55, 55), desk, width=3)
+        pygame.draw.line(screen, (92, 73, 52), desk[0], desk[1], 5)
+        draw_desk_props(screen)
 
         # Door frames
         pygame.draw.rect(screen, GRAY, left_door_frame, width=3, border_radius=2)
