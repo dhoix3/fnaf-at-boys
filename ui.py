@@ -14,11 +14,28 @@ from renderer3d import OFFICE_MAP, Raycaster, Sprite3D, camera_room_world, prepa
 
 
 WIDTH, HEIGHT = 1280, 720
-ROOM_POS = {
-    "1A": (0, 0), "1B": (1, 0), "1C": (2, 0),
-    "2A": (0, 1), "2B": (1, 1), "4A": (2, 1),
-    "5": (0, 2), "6": (1, 2), "4B": (2, 2), "7": (0, 3),
+CAM_MAP_SIZE = (492, 400)
+CAM_MAP_RECT = pygame.Rect(900, 142, 282, 230)
+CAM_NODES = {
+    "1A": (162, 12, 65, 42), "1B": (140, 74, 65, 42),
+    "1C": (104, 164, 65, 40), "5": (20, 105, 64, 42), "7": (398, 105, 65, 42),
+    "3": (68, 272, 65, 42), "2A": (160, 292, 65, 41), "2B": (160, 340, 65, 42),
+    "6": (390, 252, 65, 42), "4A": (278, 292, 65, 41), "4B": (278, 340, 65, 42),
 }
+CAM_CONNECTIONS = (
+    ((194, 54), (194, 61), (300, 61), (300, 74)),
+    ((110, 96), (84, 96), (84, 126)),
+    ((110, 185), (78, 185), (78, 148), (52, 148)),
+    ((169, 184), (194, 184), (194, 116)),
+    ((375, 126), (430, 126)),
+    ((101, 314), (101, 291), (150, 291), (150, 272), (160, 272)),
+    ((224, 312), (278, 312)),
+    ((192, 333), (192, 340)),
+    ((422, 294), (350, 294), (350, 312), (343, 312)),
+    ((310, 333), (310, 340)),
+    ((224, 361), (220, 361)),
+    ((278, 361), (275, 361)),
+)
 
 
 def asset_path(relative: str) -> str:
@@ -116,14 +133,14 @@ class UI:
 
     def _camera_click(self, pos: tuple[int, int], game) -> bool:
         x, y = pos
-        if 990 <= x <= 1205 and 125 <= y <= 395:
-            col = min(2, max(0, (x - 994) // 68))
-            row = min(3, max(0, (y - 130) // 64))
-            for room, (cx, cy) in ROOM_POS.items():
-                if (cx, cy) == (col, row):
-                    game.cameras.select(room)
-                    game.audio.play("camera")
-                    return True
+        for room, (nx, ny, nw, nh) in CAM_NODES.items():
+            rect = pygame.Rect(CAM_MAP_RECT.x + nx * CAM_MAP_RECT.w // 492,
+                               CAM_MAP_RECT.y + ny * CAM_MAP_RECT.h // 400,
+                               max(1, nw * CAM_MAP_RECT.w // 492), max(1, nh * CAM_MAP_RECT.h // 400))
+            if rect.collidepoint(pos):
+                game.cameras.select(room)
+                game.audio.play("camera")
+                return True
         if (x > 1120 and y < 100) or pygame.Rect(990, 522, 180, 44).collidepoint(pos):
             game.set_camera_open(False)
             return True
@@ -361,16 +378,23 @@ class UI:
             flash = pygame.Surface((feed.w,feed.h),pygame.SRCALPHA)
             flash.fill((110,144,122,30))
             self.screen.blit(flash,feed.topleft)
-        # Right-side room map, with tactile key buttons and enemy indicators.
-        self._text(self._l(game, "cam_map"),self.tiny,(149,154,142),(990,100))
-        for room,(col,row) in ROOM_POS.items():
-            rect=pygame.Rect(994+col*68,130+row*64,59,52)
-            active=room==game.cameras.current
-            pygame.draw.rect(self.screen,(62,35,34) if active else (26,30,28),rect,border_radius=4)
-            pygame.draw.rect(self.screen,(171,79,62) if active else (85,96,83),rect,2,border_radius=4)
-            self._text(room,self.tiny,(225,225,207) if active else (157,168,151),rect.center,True,False)
+        # Connected room map, scaled from the FNAF-style floor plan.
+        self._text(self._l(game, "cam_map"), self.tiny, (149,154,142), (990,100))
+        for points in CAM_CONNECTIONS:
+            scaled = [(CAM_MAP_RECT.x + px * CAM_MAP_RECT.w // 492,
+                       CAM_MAP_RECT.y + py * CAM_MAP_RECT.h // 400) for px, py in points]
+            pygame.draw.lines(self.screen, (91,101,86), False, scaled, 2)
+        for room, (nx, ny, nw, nh) in CAM_NODES.items():
+            rect = pygame.Rect(CAM_MAP_RECT.x + nx * CAM_MAP_RECT.w // 492,
+                               CAM_MAP_RECT.y + ny * CAM_MAP_RECT.h // 400,
+                               max(1, nw * CAM_MAP_RECT.w // 492), max(1, nh * CAM_MAP_RECT.h // 400))
+            active = room == game.cameras.current
+            pygame.draw.rect(self.screen, (112,25,27) if active else (26,30,28), rect, border_radius=3)
+            pygame.draw.rect(self.screen, (230,48,43) if active else (114,130,108), rect, 2, border_radius=3)
+            self._text("YOU" if room == "2B" else room, self.tiny,
+                       (255,225,213) if active else (184,194,175), rect.center, True, False)
             if game.enemies_in_room(room):
-                pygame.draw.circle(self.screen,(220,37,31),(rect.right-5,rect.y+5),4)
+                pygame.draw.circle(self.screen, (235,37,31), (rect.right-3,rect.y+3), 3)
         self._text(self._l(game, "cam_switch_hint"),self.tiny,(128,138,127),(990,424))
         pygame.draw.rect(self.screen,(32,33,31),(990,466,180,42),border_radius=3)
         pygame.draw.rect(self.screen,(120,125,116),(990,466,180,42),1,border_radius=3)
