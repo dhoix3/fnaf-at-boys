@@ -1,11 +1,11 @@
 # Five Nights at the Boys'
 
-A first-person, software-raycast Pygame night-shift horror game. The 3D-style world is rendered entirely with `pygame.Surface` and standard 2D drawing; animatronics are billboards cut from the five supplied photos, with no OpenGL or external models. The game code is split into focused modules:
+A first-person Pygame night-shift horror game. The office is a hand-drawn 2.5D panorama with mouse-look parallax, and surveillance feeds are static 2D scenes with photo-based animatronics and VHS interference. No OpenGL or external models are used. The game code is split into focused modules:
 
 - `main.py` — application entry point.
 - `game.py` — game loop, input and mode transitions.
 - `entities.py` — player controls, cameras and animatronic behavior.
-- `renderer3d.py` — textured DDA raycaster, animated door planes and z-buffered, camera-facing photo billboards.
+- `office_render.py` — native-Pygame office panorama, static surveillance-room scenes and photo alpha preparation.
 - `ui.py` — HUD, CRT/VHS treatment, first-person camera tablet, menus and scare rendering.
 - `audio_manager.py` — optional file-backed sound playback with silent fallback.
 - `localization.py` and `locales/` — English/Russian UI strings.
