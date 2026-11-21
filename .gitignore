@@ -3,4 +3,5 @@ build/
 .venv/
 __pycache__/
 *.py[cod]
+config.json
 .DS_Store

@@ -49,6 +49,20 @@ class AudioManager:
                 if name not in self.sounds:
                     log.warning("Optional audio missing: %s (silent fallback)", candidates[0])
         self.ambient_channel: pygame.mixer.Channel | None = None
+        self.active_channels: list[pygame.mixer.Channel] = []
+        self.volume = 0.75
+        self.set_volume(self.volume)
+
+    def set_volume(self, volume: float) -> None:
+        self.volume = max(0.0, min(1.0, float(volume)))
+        try:
+            pygame.mixer.music.set_volume(self.volume)
+            for channel in self.active_channels:
+                channel.set_volume(self.volume)
+            if self.ambient_channel is not None:
+                self.ambient_channel.set_volume(self.volume)
+        except pygame.error as exc:
+            log.debug("Could not apply master volume: %s", exc)
 
     def play(self, name: str, loops: int = 0) -> None:
         sound = self.sounds.get(name)
@@ -58,8 +72,15 @@ class AudioManager:
             if name == "ambient":
                 if self.ambient_channel is None or not self.ambient_channel.get_busy():
                     self.ambient_channel = sound.play(loops=-1)
+                    if self.ambient_channel is not None:
+                        self.ambient_channel.set_volume(self.volume)
             else:
-                sound.play(loops=loops)
+                channel = sound.play(loops=loops)
+                if channel is not None:
+                    channel.set_volume(self.volume)
+                    if len(self.active_channels) >= 24:
+                        self.active_channels.pop(0)
+                    self.active_channels.append(channel)
         except pygame.error as exc:
             log.debug("Audio playback failed (%s): %s", name, exc)
 

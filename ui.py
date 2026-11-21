@@ -59,9 +59,30 @@ class UI:
     def press(self, name: str) -> None:
         self.pressed[name] = time.monotonic() + 0.13
 
+    def _l(self, game, key: str, **values) -> str:
+        return game.localization.get(key, **values)
+
     def hit_test(self, pos: tuple[int, int], game) -> bool:
         x, y = pos
         if game.mode == "menu":
+            if pygame.Rect(485, 452, 310, 62).collidepoint(pos):
+                game.mode = "settings"
+            else:
+                game.start_night()
+            return True
+        if game.mode == "settings":
+            if pygame.Rect(485, 500, 310, 62).collidepoint(pos):
+                game.leave_settings()
+            elif pygame.Rect(450, 205, 430, 64).collidepoint(pos):
+                game.set_language("ru" if game.localization.language == "en" else "en")
+            elif pygame.Rect(630, 305, 60, 56).collidepoint(pos):
+                game.set_volume(game.settings["volume"] - 0.1)
+            elif pygame.Rect(880, 305, 60, 56).collidepoint(pos):
+                game.set_volume(game.settings["volume"] + 0.1)
+            elif pygame.Rect(710, 305, 150, 56).collidepoint(pos):
+                game.set_volume((x - 710) / 150)
+            elif pygame.Rect(450, 390, 450, 64).collidepoint(pos):
+                game.set_fullscreen(not game.settings["fullscreen"])
             return True
         if game.mode in ("dead", "won"):
             return True
@@ -108,6 +129,8 @@ class UI:
     def draw(self, game) -> None:
         if game.mode == "menu":
             self._draw_menu(game)
+        elif game.mode == "settings":
+            self._draw_settings(game)
         elif game.mode == "playing":
             self._draw_office(game)
             if game.cameras.open:
@@ -134,24 +157,54 @@ class UI:
 
     def _draw_menu(self, game) -> None:
         self.screen.fill((5, 6, 8))
-        self._draw_wall_and_floor()
+        self._draw_wall_and_floor(game)
         shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         shade.fill((0, 0, 0, 105))
         self.screen.blit(shade, (0, 0))
-        self._text("FIVE NIGHTS", self.title, (184, 183, 171), (WIDTH//2, 190), True)
-        self._text("AT THE BOYS'", self.title, (159, 34, 34), (WIDTH//2, 255), True)
-        pygame.draw.line(self.screen, (92, 73, 54), (430, 298), (850, 298), 2)
-        self._text("SECURITY LOG  /  NIGHT 01", self.small, (139, 144, 137), (WIDTH//2, 330), True)
-        now = time.monotonic()
-        pulse = 0.5 + 0.5 * math.sin(now * 4.0)
-        box = pygame.Rect(485, 405, 310, 72)
-        self._button(box, "START NIGHT", True, "start")
+        self._text(self._l(game, "title_top"), self.title, (184, 183, 171), (WIDTH//2, 175), True)
+        self._text(self._l(game, "title_bottom"), self.title, (159, 34, 34), (WIDTH//2, 237), True)
+        pygame.draw.line(self.screen, (92, 73, 54), (430, 280), (850, 280), 2)
+        self._text(self._l(game, "menu_subtitle"), self.small, (139, 144, 137), (WIDTH//2, 308), True)
+        pulse = 0.5 + 0.5 * math.sin(time.monotonic() * 4.0)
+        self._button(pygame.Rect(485, 365, 310, 62), self._l(game, "menu_start"), True, "start")
+        self._button(pygame.Rect(485, 452, 310, 62), self._l(game, "menu_settings"), False, "settings")
         if pulse > 0.35:
-            self._text("PRESS ANY KEY", self.small, (180, 31, 31), (WIDTH//2, 520), True)
-        self._text("A / D DOORS    Q / E LIGHTS    SPACE CAMERAS", self.tiny, (108, 111, 108), (WIDTH//2, 590), True)
-        self.screen.blit(self.vhs, (0, 0))
+            self._text(self._l(game, "menu_press_any_key"), self.small, (180, 31, 31), (WIDTH//2, 552), True)
+        self._text(self._l(game, "controls_hint"), self.tiny, (108, 111, 108), (WIDTH//2, 610), True)
 
-    def _draw_wall_and_floor(self) -> None:
+    def _draw_settings(self, game) -> None:
+        self.screen.fill((5, 6, 8))
+        self._draw_wall_and_floor(game)
+        veil = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        veil.fill((0, 0, 0, 166))
+        self.screen.blit(veil, (0, 0))
+        panel = pygame.Rect(330, 110, 620, 500)
+        pygame.draw.rect(self.screen, (11, 13, 13), panel.move(0, 8), border_radius=8)
+        pygame.draw.rect(self.screen, (27, 30, 29), panel, border_radius=8)
+        pygame.draw.rect(self.screen, (103, 107, 98), panel, 2, border_radius=8)
+        self._text(self._l(game, "settings_title"), self.title, (184, 183, 171), (640, 156), True)
+
+        self._text(self._l(game, "settings_language"), self.small, (193, 194, 180), (420, 237), True)
+        self._button(pygame.Rect(700, 205, 180, 64), game.localization.language.upper(), True, "language")
+
+        self._text(self._l(game, "settings_volume"), self.small, (193, 194, 180), (460, 333), True)
+        self._button(pygame.Rect(630, 305, 60, 56), "−", False, "volume_down")
+        bar = pygame.Rect(710, 325, 150, 18)
+        pygame.draw.rect(self.screen, (4, 6, 6), bar, border_radius=4)
+        fill = bar.copy()
+        fill.width = int(bar.width * game.settings["volume"])
+        pygame.draw.rect(self.screen, (127, 163, 112), fill, border_radius=4)
+        pygame.draw.rect(self.screen, (105, 110, 103), bar, 1, border_radius=4)
+        self._button(pygame.Rect(880, 305, 60, 56), "+", False, "volume_up")
+        self._text(f"{int(game.settings['volume']*100)}%", self.tiny, (210, 215, 199), (805, 360), True, False)
+
+        self._text(self._l(game, "settings_fullscreen"), self.small, (193, 194, 180), (460, 423), True)
+        flag = game.settings["fullscreen"]
+        self._button(pygame.Rect(700, 395, 180, 64), self._l(game, "settings_on" if flag else "settings_off"), flag, "fullscreen")
+        self._button(pygame.Rect(485, 500, 310, 62), self._l(game, "settings_back"), False, "back")
+        self._text(self._l(game, "settings_shortcuts"), self.tiny, (107, 112, 105), (640, 578), True)
+
+    def _draw_wall_and_floor(self, game) -> None:
         self.screen.fill((13, 14, 16))
         # Converging wall planes give the room a clear vanishing point.
         pygame.draw.polygon(self.screen, (23, 24, 26), [(0, 0), (WIDTH, 0), (WIDTH, 440), (850, 453), (430, 453), (0, 440)])
@@ -172,8 +225,8 @@ class UI:
         for y, spread in ((510, 90), (575, 185), (650, 310)):
             pygame.draw.line(self.screen, (32, 30, 28), (640-spread, y), (640+spread, y), 2)
         # Framed posters and crude mascot art.
-        for rect, color, word in ((pygame.Rect(318, 166, 105, 143), (74, 54, 40), "PARTY!"),
-                                  (pygame.Rect(858, 166, 105, 143), (57, 48, 45), "SMILE")):
+        for rect, color, word in ((pygame.Rect(318, 166, 105, 143), (74, 54, 40), game.localization.get("poster_party")),
+                                  (pygame.Rect(858, 166, 105, 143), (57, 48, 45), game.localization.get("poster_smile"))):
             pygame.draw.rect(self.screen, (7, 7, 7), rect.move(6, 7))
             pygame.draw.rect(self.screen, (116, 86, 56), rect)
             inner = rect.inflate(-10, -10)
@@ -191,7 +244,7 @@ class UI:
         self.screen.blit(lamp_glow, (460, 120))
 
     def _draw_office(self, game) -> None:
-        self._draw_wall_and_floor()
+        self._draw_wall_and_floor(game)
         # Door alcoves, layered frames and deep black hallways.
         frames = {"left": pygame.Rect(224, 202, 150, 283), "right": pygame.Rect(906, 202, 150, 283)}
         for side, frame in frames.items():
@@ -218,21 +271,21 @@ class UI:
         self._draw_desk()
 
         # Buttons, HUD and crosshair status.
-        self._button(pygame.Rect(24,380,188,72), f"LEFT DOOR\n{'SEALED' if game.player.doors['left'] else 'OPEN'}", game.player.doors['left'], "left_door")
-        self._button(pygame.Rect(24,463,188,72), f"LEFT LIGHT\n{'ON' if game.player.lights['left'] else 'OFF'}", game.player.lights['left'], "left_light")
-        self._button(pygame.Rect(1068,380,188,72), f"RIGHT DOOR\n{'SEALED' if game.player.doors['right'] else 'OPEN'}", game.player.doors['right'], "right_door")
-        self._button(pygame.Rect(1068,463,188,72), f"RIGHT LIGHT\n{'ON' if game.player.lights['right'] else 'OFF'}", game.player.lights['right'], "right_light")
-        self._button(pygame.Rect(522,638,236,58), "CAMERAS  [SPACE]", game.cameras.open, "camera")
+        self._button(pygame.Rect(24,380,188,72), self._l(game, "door_left", status=self._l(game, "state_sealed" if game.player.doors['left'] else "state_open")), game.player.doors['left'], "left_door")
+        self._button(pygame.Rect(24,463,188,72), self._l(game, "light_left", status=self._l(game, "state_on" if game.player.lights['left'] else "state_off")), game.player.lights['left'], "left_light")
+        self._button(pygame.Rect(1068,380,188,72), self._l(game, "door_right", status=self._l(game, "state_sealed" if game.player.doors['right'] else "state_open")), game.player.doors['right'], "right_door")
+        self._button(pygame.Rect(1068,463,188,72), self._l(game, "light_right", status=self._l(game, "state_on" if game.player.lights['right'] else "state_off")), game.player.lights['right'], "right_light")
+        self._button(pygame.Rect(522,638,236,58), self._l(game, "camera_button"), game.cameras.open, "camera")
         self._text(f"{game.clock_label}", self.font, (160, 225, 164), (640, 31), True)
-        self._text(f"POWER  {int(game.player.power):02d}%", self.small, (222, 61, 50) if game.player.power < 25 else (207, 207, 193), (25, 24))
+        self._text(self._l(game, "power", value=int(game.player.power)), self.small, (222, 61, 50) if game.player.power < 25 else (207, 207, 193), (25, 24))
         bar = pygame.Rect(25, 52, 210, 12)
         pygame.draw.rect(self.screen, (5, 6, 6), bar)
         pygame.draw.rect(self.screen, (139, 40, 35) if game.player.power < 25 else (111, 163, 102), (bar.x, bar.y, int(bar.w*game.player.power/100), bar.h))
         pygame.draw.rect(self.screen, (135, 136, 128), bar, 1)
         usage = 1 + int(game.cameras.open) + sum(game.player.doors.values()) + sum(game.player.lights.values())
-        self._text("USAGE  " + "▮"*usage, self.tiny, (197, 204, 181), (25, 73))
+        self._text(self._l(game, "usage", bars="▮"*usage), self.tiny, (197, 204, 181), (25, 73))
         if game.player.power < 18 and int(time.monotonic()*3) % 2:
-            self._text("LOW POWER", self.small, (235, 40, 34), (640, 568), True)
+            self._text(self._l(game, "low_power"), self.small, (235, 40, 34), (640, 568), True)
 
     def _door_light(self, rect: pygame.Rect) -> None:
         # A feathered alpha ellipse softly illuminates only the doorway opening.
@@ -312,11 +365,11 @@ class UI:
         pygame.draw.rect(self.screen,(5,9,7),feed)
         pygame.draw.rect(self.screen,(59,87,66),feed,2)
         room = game.cameras.current
-        self._text(f"CAM {room}  //  {game.room_names.get(room,'UNKNOWN')}", self.small, (138,221,152), (feed.x+20,feed.y+14))
+        self._text(self._l(game, "cam_feed", room=room, name=self._l(game, f"room_{room}")), self.small, (138,221,152), (feed.x+20,feed.y+14))
         foxy = next((enemy for enemy in game.enemies if enemy.name == "Foxy"), None)
         if foxy and foxy.running:
             pygame.draw.rect(self.screen, (72, 8, 12), (feed.x+16, feed.bottom-58, feed.w-32, 32))
-            self._text("MOTION ALERT  /  DROP TABLET — CLOSE LEFT DOOR", self.tiny, (255,125,103), (feed.centerx,feed.bottom-42), True, False)
+            self._text(self._l(game, "motion_alert"), self.tiny, (255,125,103), (feed.centerx,feed.bottom-42), True, False)
         occupants = game.enemies_in_room(room)
         if occupants:
             enemy = occupants[0]
@@ -325,7 +378,7 @@ class UI:
             # Dirty chromatic fringe and occasional horizontal tearing.
             pygame.draw.line(self.screen,(100,28,37),(rect.x-8,rect.centery),(rect.right+10,rect.centery),2)
         else:
-            self._draw_empty_feed(feed, room)
+            self._draw_empty_feed(feed, room, game)
         if time.monotonic() < game.cameras.glitch_until:
             for _ in range(20):
                 gy = random.randrange(feed.y+34,feed.bottom-8)
@@ -335,7 +388,7 @@ class UI:
             flash.fill((110,144,122,30))
             self.screen.blit(flash,feed.topleft)
         # Right-side room map, with tactile key buttons and enemy indicators.
-        self._text("FACILITY MAP",self.tiny,(149,154,142),(990,100))
+        self._text(self._l(game, "cam_map"),self.tiny,(149,154,142),(990,100))
         for room,(col,row) in ROOM_POS.items():
             rect=pygame.Rect(994+col*68,130+row*64,59,52)
             active=room==game.cameras.current
@@ -344,16 +397,16 @@ class UI:
             self._text(room,self.tiny,(225,225,207) if active else (157,168,151),rect.center,True,False)
             if game.enemies_in_room(room):
                 pygame.draw.circle(self.screen,(220,37,31),(rect.right-5,rect.y+5),4)
-        self._text("CLICK ROOM TO SWITCH",self.tiny,(128,138,127),(990,424))
+        self._text(self._l(game, "cam_switch_hint"),self.tiny,(128,138,127),(990,424))
         pygame.draw.rect(self.screen,(32,33,31),(990,466,180,42),border_radius=3)
         pygame.draw.rect(self.screen,(120,125,116),(990,466,180,42),1,border_radius=3)
-        self._text("SIGNAL  ▮▮▮▮",self.tiny,(143,207,145),(1080,487),True,False)
+        self._text(self._l(game, "cam_signal"),self.tiny,(143,207,145),(1080,487),True,False)
         pygame.draw.rect(self.screen,(45,32,31),(990,522,180,44),border_radius=3)
         pygame.draw.rect(self.screen,(136,76,60),(990,522,180,44),1,border_radius=3)
-        self._text("LOWER TABLET",self.tiny,(210,179,159),(1080,544),True,False)
-        self._text("CAMERA SYSTEM  •  LIVE",self.tiny,(122,133,122),(110,615))
+        self._text(self._l(game, "cam_lower"),self.tiny,(210,179,159),(1080,544),True,False)
+        self._text(self._l(game, "cam_live"),self.tiny,(122,133,122),(110,615))
 
-    def _draw_empty_feed(self, feed: pygame.Rect, room: str) -> None:
+    def _draw_empty_feed(self, feed: pygame.Rect, room: str, game) -> None:
         pygame.draw.rect(self.screen,(16,19,17),feed.inflate(-24,-70))
         # Room dressing varies by feed: party tables, hallway vanishing point, cove curtain.
         inner=feed.inflate(-35,-95)
@@ -367,7 +420,7 @@ class UI:
             for x in range(inner.x+35,inner.right-25,100):
                 pygame.draw.line(self.screen,(63,59,49),(x,inner.y+80),(x,inner.bottom-10),4)
                 pygame.draw.circle(self.screen,(108,91,62),(x,inner.y+75),10,2)
-        self._text("NO MOTION DETECTED",self.tiny,(104,120,106),(feed.centerx,feed.bottom-30),True)
+        self._text(self._l(game, "cam_empty"),self.tiny,(104,120,106),(feed.centerx,feed.bottom-30),True)
 
     def _draw_scare(self, game) -> None:
         elapsed = time.monotonic() - game.scare_started
@@ -393,14 +446,14 @@ class UI:
 
     def _draw_end(self, game) -> None:
         self.screen.fill((4,4,5))
-        self._draw_wall_and_floor()
+        self._draw_wall_and_floor(game)
         veil=pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA)
         veil.fill((0,0,0,220))
         self.screen.blit(veil,(0,0))
         won=game.mode=="won"
-        self._text("6:00 AM" if won else "SHIFT TERMINATED",self.title,(195,207,186) if won else (175,33,37),(640,270),True)
-        self._text("YOU SURVIVED THE NIGHT" if won else "THEY FOUND YOU",self.font,(198,195,177),(640,342),True)
+        self._text("6:00 " + self._l(game, "period_am") if won else self._l(game, "game_over"),self.title,(195,207,186) if won else (175,33,37),(640,270),True)
+        self._text(self._l(game, "game_survived" if won else "game_found"),self.font,(198,195,177),(640,342),True)
         rect=pygame.Rect(472,420,336,66)
-        self._button(rect,"RESTART NIGHT",False,"restart")
+        self._button(rect,self._l(game,"game_restart"),False,"restart")
         if int(time.monotonic()*2)%2:
-            self._text("CLICK OR PRESS ANY KEY",self.tiny,(123,124,116),(640,528),True)
+            self._text(self._l(game,"game_restart_hint"),self.tiny,(123,124,116),(640,528),True)
