@@ -1,5 +1,6 @@
 # Generated PyInstaller build output
 build/
+.venv/
 __pycache__/
 *.py[cod]
 .DS_Store
