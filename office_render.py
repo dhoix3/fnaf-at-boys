@@ -12,14 +12,21 @@ def prepare_photo(image, size=(160, 240)):
     for x in range(sprite.get_width()):
         for y in range(sprite.get_height()):
             c = sprite.unmap_rgb(pixels[x, y])
-            if max(c.r, c.g, c.b) <= 20:
+            if max(c.r, c.g, c.b) <= 38:
                 pixels[x, y] = key
     del pixels
-    return sprite
+    # A tiny dropped silhouette masks JPEG edge chatter against dark scenes.
+    mask = pygame.mask.from_surface(sprite)
+    shadow = mask.to_surface(setcolor=(0, 0, 0, 165), unsetcolor=(0, 0, 0, 0))
+    shadow.set_colorkey((0, 0, 0))
+    composed = pygame.Surface(sprite.get_size(), pygame.SRCALPHA)
+    composed.blit(shadow, (2, 2))
+    composed.blit(sprite, (0, 0))
+    return composed
 
 def _poly(dst, color, pts): pygame.draw.polygon(dst, color, pts)
 
-def render_office(dst, offset=0.0, doors=None, lights=None, intruders=None, fan_phase=0.0):
+def render_office(dst, offset=0.0, doors=None, lights=None, intruders=None, fan_phase=0.0, images=None):
     """Draw a fixed-width office panorama; offset pans between left, center and right."""
     offset = max(-330, min(330, int(offset)))
     s = pygame.Surface((W, H))
@@ -40,10 +47,24 @@ def render_office(dst, offset=0.0, doors=None, lights=None, intruders=None, fan_
             pygame.draw.polygon(s,(115,96,62),[(x+30,150),(x+160,150),(x+185,460),(x+5,460)])
         if doors and doors.get(side):
             pygame.draw.rect(s,(63,66,64),(x-4,145,198,320)); pygame.draw.line(s,(113,112,99),(x+20,155),(x+20,460),3)
-        enemy = (intruders or {}).get(side)
-        if enemy and (lights and lights.get(side)):
-            pygame.draw.ellipse(s,(12,12,12),(x+35,210,120,238))
-            pygame.draw.circle(s,(255,24,16),(x+69,278),7); pygame.draw.circle(s,(255,24,16),(x+119,278),7)
+        enemy_photo = (intruders or {}).get(side)
+        if enemy_photo and not (doors and doors.get(side)):
+            opening = pygame.Rect(x, 145, 190, 330)
+            if lights and lights.get(side):
+                photo = (images or {}).get(enemy_photo)
+                if photo:
+                    # Crop the portrait to the doorway; retain its natural colors.
+                    portrait = pygame.transform.smoothscale(photo, (opening.w, opening.h))
+                    s.set_clip(opening)
+                    s.blit(portrait, opening.topleft)
+                    s.set_clip(None)
+            else:
+                # Unlit doorway: absolute silhouette black with only visible eye-shine.
+                pygame.draw.rect(s, (0, 0, 0), opening)
+                eye_y = 262
+                for eye_x in (x + 70, x + 120):
+                    pygame.draw.circle(s, (110, 0, 0), (eye_x, eye_y), 11)
+                    pygame.draw.circle(s, (255, 18, 12), (eye_x, eye_y), 6)
     # posters, drawings and vent grilles
     for x, c in ((342,(100,76,55)),(770,(75,72,61))):
         pygame.draw.rect(s,(83,77,64),(x,118,110,142)); pygame.draw.rect(s,c,(x+8,126,94,126))
@@ -65,6 +86,15 @@ def render_office(dst, offset=0.0, doors=None, lights=None, intruders=None, fan_
     for i in range(3):
         a=fan_phase+i*math.tau/3; ex=cx+math.cos(a)*35; ey=cy+math.sin(a)*35
         pygame.draw.line(s,(122,116,96),(cx,cy),(int(ex),int(ey)),7)
+    # Circular wire guard and radial spokes sit in front of the rotating blades.
+    for radius in (20, 30, 40):
+        pygame.draw.circle(s, (126, 124, 110), (cx, cy), radius, 2)
+    for angle in range(0, 180, 30):
+        a = math.radians(angle)
+        pygame.draw.line(s, (104, 104, 94),
+                         (int(cx-math.cos(a)*40), int(cy-math.sin(a)*40)),
+                         (int(cx+math.cos(a)*40), int(cy+math.sin(a)*40)), 1)
+    pygame.draw.circle(s, (157, 149, 126), (cx, cy), 7, 2)
     # papers and mug
     _poly(s,(182,174,150),[(405,563),(515,548),(530,600),(418,614)])
     for y in (566,576,586): pygame.draw.line(s,(111,104,88),(426,y),(505,y-8),1)
@@ -73,6 +103,7 @@ def render_office(dst, offset=0.0, doors=None, lights=None, intruders=None, fan_
     for x in (18,1190):
         pygame.draw.rect(s,(36,37,34),(x,300,72,150),border_radius=5)
         for j,col in enumerate(((140,42,33),(147,127,70))): pygame.draw.rect(s,col,(x+12,316+j*58,48,40),border_radius=4)
+    dst.fill((0, 0, 0))
     dst.blit(s,(offset,0))
 
 def render_camera(dst, room, occupants=(), images=None, tick=0):
@@ -95,7 +126,11 @@ def render_camera(dst, room, occupants=(), images=None, tick=0):
         pygame.draw.polygon(dst,(45,47,42),[(0,int(h*.23)),(w,int(h*.12)),(w,int(h*.39)),(0,int(h*.48))])
         for x in range(24,w,55): pygame.draw.line(dst,(87,88,79),(x,int(h*.24)),(x,int(h*.38)),2)
         if room=="3": pygame.draw.rect(dst,(75,65,52),(int(w*.2),int(h*.5),int(w*.6),int(h*.18)))
-    for i,photo in enumerate(occupants):
+    # Faint phosphor haze belongs to the room only; photo sprites stay true-color.
+    haze = pygame.Surface((w, h), pygame.SRCALPHA)
+    haze.fill((46, 74, 50, 30))
+    dst.blit(haze, (0, 0))
+    for photo in list(occupants)[:1]:
         if images and photo in images:
             img=pygame.transform.smoothscale(images[photo],(int(w*.25),int(h*.7)))
-            dst.blit(img,(int(w*(.28+i*.25)),int(h*.25)))
+            dst.blit(img, (int(w*.375), int(h*.25)))
