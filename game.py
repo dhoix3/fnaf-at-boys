@@ -108,7 +108,7 @@ class Game:
                 self._mouse_warp_pending = False
                 return
             self._mouse_warp_pending = False
-            self.look_angle = (self.look_angle + event.rel[0] * 0.0038) % math.tau
+            self.look_angle = max(-1.5, min(1.5, self.look_angle + event.rel[0] * 0.0038))
             if event.pos[0] <= 2 or event.pos[0] >= WIDTH - 3:
                 pygame.mouse.set_pos((WIDTH // 2, event.pos[1]))
                 self._mouse_warp_pending = True
@@ -154,9 +154,9 @@ class Game:
         if event.key == pygame.K_ESCAPE:
             self.set_camera_open(False)
         elif event.key == pygame.K_LEFT:
-            self.look_angle = (self.look_angle - 0.08) % math.tau
+            self.look_angle = max(-1.5, self.look_angle - 0.08)
         elif event.key == pygame.K_RIGHT:
-            self.look_angle = (self.look_angle + 0.08) % math.tau
+            self.look_angle = min(1.5, self.look_angle + 0.08)
         elif event.key == pygame.K_SPACE:
             self.set_camera_open(not self.cameras.open)
         elif event.key in (pygame.K_a, pygame.K_d, pygame.K_q, pygame.K_e) and not self.cameras.open:
